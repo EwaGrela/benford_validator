@@ -1,0 +1,18 @@
+{% if names %}
+    <h1>DATAFRAMES ANALYSIS</h1>
+    <ul>
+    {%for  name in names %}
+        <li>
+            <a href="/analyze_dataset/{{name.name}}" target="_blank">{{name.name}}</a>
+        </li>
+    {% endfor %}
+    </ul>
+    <h2>DATAFRAMES DOWNLOAD</h2>
+    <ul>
+    {%for  name in names %}
+        <li>
+            <a href="/dataset/{{name.name}}" target="blank"><button class='btn btn-default'>Download {{name.name}}</button></a>
+        </li>
+    {% endfor %}
+    </ul>
+{% endif %}
