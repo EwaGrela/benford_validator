@@ -16,14 +16,14 @@ class TestDataframeReader(unittest.TestCase):
 
     def test_process_file(self):
         csv = csv_file2.read()
-        result = self.dfr.process_file(csv)
+        result = self.dfr.process_file(csv, "some_data")
         columns = list(result.columns)
         self.assertTrue("my_data" in columns)
     
-    def test_validate_third_column(self):
+    def test_validate_target_column(self):
         csv = csv_file3.read()
-        df = self.dfr.process_file(csv)
-        result = self.dfr.validate_third_column(df)
+        df = self.dfr.process_file(csv, "some_data")
+        result = self.dfr.validate_target_column(df)
         self.assertTrue(result)
 
 class TestBenfordValidator(unittest.TestCase):
@@ -36,7 +36,7 @@ class TestBenfordValidator(unittest.TestCase):
         # It makes not much sense to test each method of BenfordValidator separately.
         # They depend on one another
         # Chi square test is the most important one, it verifies the result
-        df = self.DFR.process_file(self.CSV)
+        df = self.DFR.process_file(self.CSV, "population")
         results = self.BV.count_first_digit("my_data", df)
         self.assertTrue(isinstance(results, tuple))
         self.assertEqual(len(results), 3)

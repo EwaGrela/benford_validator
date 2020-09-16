@@ -58,6 +58,7 @@ app = Flask(__name__)
 
 class DataframeReader:
     FILE_EXTENSIONS = [".csv", ".tsv"]
+    TARGET_NAME = "my_data"
 
     def check_extension(self, filename):
         extension = os.path.splitext(filename)[1]
@@ -67,23 +68,31 @@ class DataframeReader:
             return False, extension
         return True, extension
     
-    def process_file(self, file_read):
+    def _check_if_column(self, df, column_name):
+        if column_name not in df.columns:
+            return False
+        return True
+    
+    def process_file(self, file_read, column_name):
         s = str(file_read,'utf-8')
         # Might be needed in flat files/tsv files
         s = s.replace("\t", ",")
         data = StringIO(s)
         df = pd.read_csv(data)
-        df = df.rename(columns={df.iloc[:, 2].name : "my_data"})
-        return df
+        col_exists = self._check_if_column(df, column_name)
+        if col_exists:
+            df = df.rename(columns={column_name : self.TARGET_NAME})
+            return df
+        return None 
 
-    def validate_third_column(self, df):
-        # We assume it is the third column one analyses
-        third_column = df["my_data"]
-        return is_numeric_dtype(third_column)
+    def validate_target_column(self, df):
+        target_column = df[self.TARGET_NAME]
+        return is_numeric_dtype(target_column)
 
 
 class BenfordValidator:
     BENFORD = [30.1, 17.6, 12.5, 9.7, 7.9, 6.7, 5.8, 5.1, 4.6]
+    TARGET_NAME = "my_data"
     def count_first_digit(self, data_str, df):
         mask=df[data_str]>1      
         data=list(df[mask][data_str])
@@ -160,6 +169,10 @@ def index():
 @app.route('/', methods=['POST'])
 def upload_file():
     uploaded_file = request.files['file']
+    column_name = request.form.get("column")
+    if not column_name:
+        err = {"error": "column name was not provided"}
+        return make_response(err, 400)
     filename = secure_filename(uploaded_file.filename)
     df_reader = DataframeReader()
 
@@ -169,19 +182,27 @@ def upload_file():
         err = {"error": "wrong extension"}
         return make_response(err, 400)
     file_read = uploaded_file.read()
+    if not file_read:
+        err = {"error": "no file provided"}
+        return make_response(err, 400)
     
-    df = df_reader.process_file(file_read)
+    df = df_reader.process_file(file_read, column_name)
+
+    if df is None:
+        msg = "column {} does not exist".format(column_name)
+        err = {"error": msg}
+        return make_response(err, 400)
         # persist dataframe in DB
     name_of_table = "table_" + filename_to_write + datetime.datetime.utcnow().strftime("%m%d%Y%H%M%S")
     dbm = DatabaseManager()
     dbm.gather_df(df, name_of_table)
     dbm.gather_df_names(name_of_table)
-    third_column_numeric = df_reader.validate_third_column(df)
-    if not third_column_numeric:
+    target_column_numeric = df_reader.validate_target_column(df)
+    if not target_column_numeric:
         err = {"error": "wrong type of column"}
         return make_response(err, 400)
     benford_validator = BenfordValidator()
-    results = benford_validator.count_first_digit("my_data", df)
+    results = benford_validator.count_first_digit(benford_validator.TARGET_NAME, df)
     total_count, data_count, total_percentage = results
     expected_counts = benford_validator.get_expected_counts(total_count)
     chi_test = benford_validator.chi_square_test(data_count, expected_counts)
@@ -198,7 +219,7 @@ def analyze_dataset(name=None):
         dataframe = pd.DataFrame(results)
         # HERE we can check if this particular dataset follows Benford's Law
         benford_validator = BenfordValidator()
-        bv_res = benford_validator.count_first_digit("my_data", dataframe)
+        bv_res = benford_validator.count_first_digit(benford_validator.TARGET_NAME, dataframe)
         total_count, data_count, total_percentage = bv_res
         expected_counts = benford_validator.get_expected_counts(total_count)
         chi_test = benford_validator.chi_square_test(data_count, expected_counts)
